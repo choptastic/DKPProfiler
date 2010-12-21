@@ -2,7 +2,7 @@ DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.636 (2010-10-28)";
+local DKPPVersion = "0.637 (2010-12-22)";
 
 
 
@@ -306,10 +306,19 @@ end
 
 function DKPPGetCurrentTradeSkill()
 	local profname, lvl, max = GetTradeSkillLine();
-	local player = UnitName("player");
-	
-	if profname ~= nil and profname ~= "UNKNOWN" then
-		if DKPProfilerCharInfo[player].professions[profname]~=nil then
+	local linked,linkedplayer = IsTradeSkillLinked();
+	if linked then
+		
+	else
+		local player = UnitName("player");
+		
+		if profname ~= nil and profname ~= "UNKNOWN" then
+			if DKPProfilerCharInfo[player].professions == nil then
+				DKPProfilerCharInfo[player].professions = {};
+			end
+			if DKPProfilerCharInfo[player].professions[profname]==nil then
+				DKPProfilerCharInfo[player].professions[profname] = {};
+			end
 			if DKPProfilerCharInfo[player].professions[profname].skills == nil then
 				DKPProfilerCharInfo[player].professions[profname].skills = {};
 			end
