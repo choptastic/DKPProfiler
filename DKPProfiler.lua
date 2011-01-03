@@ -173,7 +173,7 @@ function DKPPGetAchievements()
 				catrec.progress = numdone.."/"..numcrit;
 			end
 
-			if comp ~= nil then
+			if comp == true then
 				catrec.date = M.."/"..D.."/"..Y;
 			end
 
