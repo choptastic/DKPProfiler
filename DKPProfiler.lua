@@ -147,8 +147,9 @@ function DKPPGetAchievements()
 		--DKPPPrint("ok");
 		for ii = 1,numach do
 			local numdone = 0;
-			achid,ach,achpoints,comp,_,_,_,desc = GetAchievementInfo(catid,ii);
+			achid,ach,achpoints,comp,M,D,Y,desc = GetAchievementInfo(catid,ii);
 			catrec = {};
+
 			catrec.category = cat;
 			catrec.ach = ach;
 			catrec.description = desc;
@@ -170,6 +171,10 @@ function DKPPGetAchievements()
 				catrec.progress = nil;
 			else
 				catrec.progress = numdone.."/"..numcrit;
+			end
+
+			if comp ~= nil then
+				catrec.date = M.."/"..D.."/"..Y;
 			end
 
 			if comp or numdone>0 then
@@ -395,6 +400,8 @@ function DKPPGetCurrentTradeSkill()
 				DKPProfilerCharInfo[player].professions[profname].skills = {};
 			end
 			DKPProfilerCharInfo[player].professions[profname].level = lvl;
+			DKPPStoreMetricHistory("Profession: "..profname,lvl);
+
 			local i, name, type;
 			for i = 1,GetNumTradeSkills() do
 				name, type, _, _ = GetTradeSkillInfo(i);
@@ -427,6 +434,7 @@ function DKPPGetPvP()
 				["size"] = size,
 				["rating"] = rating,
 			};
+			DKPPStoreMetricHistory(size.."v"..size..": "..team,rating);
 		end
 	end	
 	local hk,dk,rank,rankid;
@@ -442,10 +450,20 @@ function DKPPGetPvP()
 	DKPProfilerCharInfo[player].pvp.LifetimeHKs = hk;
 	DKPProfilerCharInfo[player].pvp.LifetimeDKs = dk;
 
-	_,DKPProfilerCharInfo[player].pvp.ValorPoints = GetCurrencyInfo(396);
-	_,DKPProfilerCharInfo[player].pvp.HonorPoints = GetCurrencyInfo(392);
-	_,DKPProfilerCharInfo[player].pvp.ConquestPoints = GetCurrencyInfo(390);
-	_,DKPProfilerCharInfo[player].pvp.JusticePoints = GetCurrencyInfo(395);
+	_,ValorPoints = GetCurrencyInfo(396);
+	_,HonorPoints = GetCurrencyInfo(392);
+	_,ConquestPoints = GetCurrencyInfo(390)
+	_,JusticePoints = GetCurrencyInfo(395);
+
+	_,DKPProfilerCharInfo[player].pvp.ValorPoints = ValorPoints;
+	_,DKPProfilerCharInfo[player].pvp.HonorPoints = HonorPoints;
+	_,DKPProfilerCharInfo[player].pvp.ConquestPoints = ConquestPoints;
+	_,DKPProfilerCharInfo[player].pvp.JusticePoints = JusticePoints;
+
+	DKPPStoreMetricHistory("Valor Points",ValorPoints);
+	DKPPStoreMetricHistory("Honor Points",HonorPoints);
+	DKPPStoreMetricHistory("Conquest Points",ConquestPoints);
+	DKPPStoreMetricHistory("Justice Points",JusticePoints);
 
 	local Realm, Players
 
