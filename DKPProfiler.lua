@@ -2,7 +2,7 @@ DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.700 (2010-12-15)";
+local DKPPVersion = "0.700 (2011-01-05)";
 
 
 
@@ -14,6 +14,7 @@ function DKPProfiler_OnLoad(this)
 	SLASH_DKPProfiler1 = "/dkpp";
 	SLASH_DKPProfiler2 = "/gbk";
 	
+	this:RegisterEvent("SPELLS_CHANGED");
 	this:RegisterEvent("BANKFRAME_OPENED");
 	this:RegisterEvent("GUILDBANKFRAME_OPENED");
 	this:RegisterEvent("GUILDBANK_UPDATE_TABS");
@@ -28,7 +29,6 @@ function DKPProfiler_OnLoad(this)
 	this:RegisterEvent("CONFIRM_TALENT_WIPE");
 	this:RegisterEvent("CHAT_MSG_SKILL");
 	this:RegisterEvent("PLAYER_ENTERING_WORLD");
-	--this:RegisterEvent("PLAYER_LEAVING_WORLD");
 	this:RegisterEvent("CHAT_MSG_MONEY");
 	this:RegisterEvent("UPDATE_FACTION");
 	this:RegisterEvent("QUEST_WATCH_UPDATE");
@@ -71,12 +71,15 @@ function DKPProfiler_OnEvent(self,event,...)
 		DKPPGetGold();
 	elseif (event == "CHAT_MSG_SKILL") then
 		DKPPGetTalents();
+	elseif (event == "SPELLS_CHANGED") then
+		DKPPInitializeTradeSkills();
 	elseif (event == "ADDON_LOADED") then
 		DKPPinitialize();
 		DKPPGetPvP();
 		DKPPGetTalents();
 		DKPPGetGold();
 		DKPPStorePlayerItems();
+		DKPPInitializeTradeSkills();
 	elseif (event == "QUEST_WATCH_UPDATE" or event=="QUEST_FINISHED" or event=="QUEST_COMPLETE" or event=="QUEST_PROGRESS") then
 		DKPPGetQuests();
 	elseif (event == "CHARACTER_POINTS_CHANGED" or event=="CONFIRM_TALENT_WIPE" or event=="PLAYER_ENTERING_WORLD") then
@@ -127,6 +130,7 @@ function DKPProfiler_SlashHandler(msg)
 	DKPPStorePlayerItems();
 	DKPPGetGold();
 	DKPPGetAchievements();
+	DKPPInitializeTradeSkills();
 end
 
 function DKPPGetAchievements()
@@ -376,7 +380,26 @@ function DKPPGetTalents_Glyphs(GroupNum)
 end
 
 function DKPPInitializeTradeSkills()
+	local player = UnitName("player");
+	local profs = {GetProfessions()};
+	for i,profindex in pairs(profs) do
+		if profindex ~= nil then
+			--DKPPPrint("Prof:"..profindex);
+			local profname,_,level = GetProfessionInfo(profindex);
+			
+			if DKPProfilerCharInfo[player].professions == nil then
+				DKPProfilerCharInfo[player].professions = {};
+			end
+			if DKPProfilerCharInfo[player].professions[profname]==nil then
+				DKPProfilerCharInfo[player].professions[profname] = {};
+			end
+			DKPProfilerCharInfo[player].professions[profname].lvl = level;
+			--DKPPPrint("Prof:"..profindex..":"..profname..":"..level);
 
+			DKPPStoreMetricHistory("Profession: "..profname,level);
+		end
+	end
+	
 end
 
 
