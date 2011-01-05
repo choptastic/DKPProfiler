@@ -178,7 +178,7 @@ function DKPPGetAchievements()
 			end
 
 			if comp == true then
-				catrec.date = M.."/"..D.."/"..Y;
+				catrec.date = M.."/"..D.."/"..(Y+2000);
 			end
 
 			if comp or numdone>0 then
