@@ -37,6 +37,8 @@ function DKPProfiler_OnLoad(this)
 	this:RegisterEvent("QUEST_PROGRESS");
 	this:RegisterEvent("ARENA_TEAM_UPDATE");
 	this:RegisterEvent("ACHIEVEMENT_EARNED");
+	this:RegisterEvent("ARCHAEOLOGY_TOGGLE");
+	this:RegisterEvent("ARENA_TEAM_ROSTER_UPDATE");
 
 	DEFAULT_CHAT_FRAME:AddMessage("DKP Profiler (from DKPSystem.com) Version "..DKPPVersion.." loaded. ");
 	DEFAULT_CHAT_FRAME:AddMessage("DKP Profiler will attempt to profile your character while you play, but typing |c00ffff00/dkpp|r will manually initiate a snapshot of the data available to the DKPProfiler mod");
@@ -88,8 +90,10 @@ function DKPProfiler_OnEvent(self,event,...)
 		DKPPGetReputations();
 	elseif (event == "CHAT_MSG_MONEY") then
 		DKPPGetGold();
-	elseif (event == "ARENA_TEAM_UPDATE") then
+	elseif (event == "ARENA_TEAM_UPDATE" or event=="ARENA_TEAM_ROSTER_UPDATE") then
 		DKPPGetPvP();
+	elseif (event == "ARCHAEOLOGY_TOGGLE") then
+		DKPPGetArchaeology();
 	end
 	if (event=="GUILDBANKFRAME_OPENED" or (BankOpenedOnce==true and (event == "BANKFRAME_OPENED" or (event == "PLAYERBANKSLOTS_CHANGED" and arg1 == nil) or (event == "BAG_UPDATE" and arg1 >= 6 and arg1 <= 10)))) then
 		DKPPGetTalents();
@@ -159,6 +163,7 @@ function DKPPGetAchievements()
 			catrec.description = desc;
 			catrec.completed = comp;
 			catrec.crit = {};
+			catrec.points = achpoints;
 
 			local numcrit = GetAchievementNumCriteria(achid);
 			for iii = 1,numcrit do
@@ -297,7 +302,7 @@ function DKPPGetGold()
 	local moneystring = g.." Gold, "..s.." Silver,"..c.." Copper";
 
 	DKPProfilerCharInfo[player].money = moneystring;
-	DKPPStoreMetricHistory("money",{number=GetMoney(),text=moneystring});
+	DKPPStoreMetricHistory("money",math.floor(GetMoney()/10000));
 	level = UnitLevel("player");
 	race = UnitRace("player");
 	class = UnitClass("player");
@@ -356,7 +361,7 @@ function DKPPGetTalents_Specific(GroupNum)
 				talentstring = talentstring .. rank;
 			end
 		end
-		tt.talentstring = talentstring;
+		tt.talentstring = talentstring
 	end
 	tt.Glyphs = DKPPGetTalents_Glyphs(GroupNum)
 	return tt;
@@ -379,17 +384,26 @@ function DKPPGetTalents_Glyphs(GroupNum)
 	return glyphs;
 end
 
+function DKPPIsKeyInTable(search,tab)
+	for i,v 
+
 function DKPPInitializeTradeSkills()
 	local player = UnitName("player");
 	local profs = {GetProfessions()};
+
+	if DKPProfilerCharInfo[player].professions == nil then
+		DKPProfilerCharInfo[player].professions = {};			
+	end
+
+	local usedprofs = {};
+
 	for i,profindex in pairs(profs) do
 		if profindex ~= nil then
 			--DKPPPrint("Prof:"..profindex);
 			local profname,_,level = GetProfessionInfo(profindex);
+			usedprofs[profname] = profname;
 			
-			if DKPProfilerCharInfo[player].professions == nil then
-				DKPProfilerCharInfo[player].professions = {};
-			end
+		
 			if DKPProfilerCharInfo[player].professions[profname]==nil then
 				DKPProfilerCharInfo[player].professions[profname] = {};
 			end
@@ -399,7 +413,37 @@ function DKPPInitializeTradeSkills()
 			DKPPStoreMetricHistory("Profession: "..profname,level);
 		end
 	end
-	
+
+	--TODO: TEST THIS
+	for profname,profinfo in pairs(DKPProfilerCharInfo[player].professions[profname]) do
+		if usedprofs[profname] == nil then
+			DKPProfilerCharInfo[player].professions[profname] = nil
+		end
+	end
+
+end
+
+function DKPPGetArchaeology()
+	local player = UnitName("player");
+	local profname = "Archaeology";
+	if DKPProfilerCharInfo[player].professions[profname]==nil then
+		DKPProfilerCharInfo[player].professions[profname] = {};
+	end
+
+	if DKPProfilerCharInfo[player].professions[profname].skills==nil then
+		DKPProfilerCharInfo[player].professions[profname].skills = {};
+	end
+
+	local rarities = {};
+
+	local races = GetNumArchaeologyRaces();
+	for r=1,races do
+		local arts = GetNumArtifactsByRace(r);
+		for a = 2,arts do
+			local item,_,rarity = GetArtifactInfoByRace(r,a);
+			DKPProfilerCharInfo[player].professions[profname].skills[item] = item;
+		end
+	end
 end
 
 
@@ -408,8 +452,10 @@ function DKPPGetCurrentTradeSkill()
 	local profname, lvl, max = GetTradeSkillLine();
 	local linked,linkedplayer = IsTradeSkillLinked();
 	if linked then
+		GRSSPrint("Tradeskill linked"..linkedplayer);
 		
 	else
+		GRSSPrint("Recording my tradeskills");
 		local player = UnitName("player");
 		
 		if profname ~= nil and profname ~= "UNKNOWN" then
@@ -448,14 +494,28 @@ function DKPPGetPvP()
 	end
 	
 	DKPProfilerCharInfo[player].pvp.arena = {};
-	local team,size,rating;
+	local team,size,rating,played,wins;
 	for i = 1,3 do
-		team,size,rating = GetArenaTeam(i);
+		team,size,rating,_,wins,played = GetArenaTeam(i);
 		if size ~= nil and size>0 then
+			num = GetNumArenaTeamMembers(i);
+			local players = {};
+			for mi = 1,num do
+				pname,_,plevel,pclass,_,_,_,played,wins,prating = GetArenaTeamRosterInfo(i,mi);
+				players[mi] = {
+					["name"]=pname,
+					["class"]=pclass,
+					["won"]=wins,
+					["played"]=played,
+					["rating"]=prating,
+				};
+			end
+
 			DKPProfilerCharInfo[player].pvp.arena[i] = {
 				["teamname"] = team,
 				["size"] = size,
 				["rating"] = rating,
+				["players"] = players,
 			};
 			DKPPStoreMetricHistory(size.."v"..size..": "..team,rating);
 		end
