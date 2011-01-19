@@ -2,7 +2,7 @@ DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.700 (2011-01-05)";
+local DKPPVersion = "0.700 (2011-01-28)";
 
 
 
