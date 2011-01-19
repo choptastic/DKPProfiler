@@ -384,9 +384,6 @@ function DKPPGetTalents_Glyphs(GroupNum)
 	return glyphs;
 end
 
-function DKPPIsKeyInTable(search,tab)
-	for i,v 
-
 function DKPPInitializeTradeSkills()
 	local player = UnitName("player");
 	local profs = {GetProfessions()};
@@ -414,8 +411,7 @@ function DKPPInitializeTradeSkills()
 		end
 	end
 
-	--TODO: TEST THIS
-	for profname,profinfo in pairs(DKPProfilerCharInfo[player].professions[profname]) do
+	for profname,profinfo in pairs(DKPProfilerCharInfo[player].professions) do
 		if usedprofs[profname] == nil then
 			DKPProfilerCharInfo[player].professions[profname] = nil
 		end
@@ -449,13 +445,14 @@ end
 
 
 function DKPPGetCurrentTradeSkill()
+	DKPPInitializeTradeSkills();
+
 	local profname, lvl, max = GetTradeSkillLine();
 	local linked,linkedplayer = IsTradeSkillLinked();
 	if linked then
-		GRSSPrint("Tradeskill linked"..linkedplayer);
-		
+		--do nothing
+		--TODO: Add tracking for guildies?
 	else
-		GRSSPrint("Recording my tradeskills");
 		local player = UnitName("player");
 		
 		if profname ~= nil and profname ~= "UNKNOWN" then
@@ -496,17 +493,17 @@ function DKPPGetPvP()
 	DKPProfilerCharInfo[player].pvp.arena = {};
 	local team,size,rating,played,wins;
 	for i = 1,3 do
-		team,size,rating,_,wins,played = GetArenaTeam(i);
+		team,size,rating,_,_,wins,played = GetArenaTeam(i);
 		if size ~= nil and size>0 then
 			num = GetNumArenaTeamMembers(i);
 			local players = {};
 			for mi = 1,num do
-				pname,_,plevel,pclass,_,_,_,played,wins,prating = GetArenaTeamRosterInfo(i,mi);
+				pname,_,plevel,pclass,_,_,_,pplayed,pwins,prating = GetArenaTeamRosterInfo(i,mi);
 				players[mi] = {
 					["name"]=pname,
 					["class"]=pclass,
-					["won"]=wins,
-					["played"]=played,
+					["won"]=pwins,
+					["played"]=pplayed,
 					["rating"]=prating,
 				};
 			end
@@ -516,6 +513,8 @@ function DKPPGetPvP()
 				["size"] = size,
 				["rating"] = rating,
 				["players"] = players,
+				["wins"] = wins,
+				["played"] = played
 			};
 			DKPPStoreMetricHistory(size.."v"..size..": "..team,rating);
 		end
