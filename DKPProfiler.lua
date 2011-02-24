@@ -1,6 +1,7 @@
 DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
+DKPProfilerBankTabTime = {};
 BankOpenedOnce = false;
 local DKPPVersion = "0.700 (2011-01-28)";
 
@@ -56,6 +57,8 @@ end
 function DKPProfiler_OnEvent(self,event,...)
 	local arg1 = ...;
 
+	--GRSSPrint("Event: "..event);
+
 	if (event == "BANKFRAME_OPENED") then
 		BankOpenedOnce = true;
 	elseif (event == "GUILDBANKFRAME_OPENED") then
@@ -63,7 +66,6 @@ function DKPProfiler_OnEvent(self,event,...)
 		DKPPAverageItemLevel();
 	elseif (event == "GUILDBANK_UPDATE_TABS" or event=="GUILDBANKBAGSLOTS_CHANGED") then
 		DKPPStoreGuildBankItems();
-		DKPPAverageItemLevel();
 	elseif (event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_UPDATE") then
 		DKPPGetCurrentTradeSkill();
 		DKPPGetTalents();
@@ -741,39 +743,50 @@ function DKPPStoreGuildBankItems()
 	local tabs;
 	local i,j,items;
 	tabs = GetNumGuildBankTabs();
+	local CurTime = GetTime();
 	for i = 1,tabs do
-		DKPProfilerGuildBank[i] = {};
-		name = GetGuildBankTabInfo(i);
-		DKPProfilerGuildBank[i].name = name;
-		DKPProfilerGuildBank[i].items = {};
-		for j = 1,98 do
-			_,qty = GetGuildBankItemInfo(i,j);
-			item = GetGuildBankItemLink(i,j);
-			if(item~=nil) then
-				name,_,quality,_,level,itemtype,itemsubtype,_,equiploc = GetItemInfo(item);
-				class,ttlevel = DKPPGetClassAndLevelOfBankItem(i,j);
-				local totalitem = name;
-				if class ~= nil and string.len(class)>0 then
-					totalitem=totalitem..";;"..class
-				end
-				if ttlevel ~= nil and string.len(ttlevel)>0 then
-					totalitem=totalitem..";;"..ttlevel;
-				end
-				if (DKPProfilerGuildBank[i].items[totalitem]==nil or type(DKPProfilerGuildBank[i].items[totalitem])~="table") then
-					DKPProfilerGuildBank[i].items[totalitem]={};
-					DKPProfilerGuildBank[i].items[totalitem].qty=qty;
-					DKPProfilerGuildBank[i].items[totalitem].quality=quality;
-					if(level>0) then
-						DKPProfilerGuildBank[i].items[totalitem].level=level;
+		if DKPProfilerBankTabTime[i] == nil or CurTime > DKPProfilerBankTabTime[i] + 0.5 then
+			--DKPPPrint("Loading Tab: "..i);
+			DKPProfilerGuildBank[i] = {};
+			name = GetGuildBankTabInfo(i);
+			DKPProfilerGuildBank[i].name = name;
+			DKPProfilerGuildBank[i].items = {};
+			TotalItems = 0
+			for j = 1,98 do
+				_,qty = GetGuildBankItemInfo(i,j);
+				item = GetGuildBankItemLink(i,j);
+				if(item~=nil) then
+					TotalItems = TotalItems + 1;
+					name,_,quality,_,level,itemtype,itemsubtype,_,equiploc = GetItemInfo(item);
+					class,ttlevel = DKPPGetClassAndLevelOfBankItem(i,j);
+					local totalitem = name;
+					if class ~= nil and string.len(class)>0 then
+						totalitem=totalitem..";;"..class
 					end
-					DKPProfilerGuildBank[i].items[totalitem].itemtype=itemtype;
-					DKPProfilerGuildBank[i].items[totalitem].itemsubtype=itemsubtype;
-					DKPProfilerGuildBank[i].items[totalitem].itemclasses=class;
-					DKPProfilerGuildBank[i].items[totalitem].equiploc=getglobal(equiploc);
-				else
-					DKPProfilerGuildBank[i].items[totalitem].qty=DKPProfilerGuildBank[i].items[totalitem].qty+qty;
+					if ttlevel ~= nil and string.len(ttlevel)>0 then
+						totalitem=totalitem..";;"..ttlevel;
+					end
+					if (DKPProfilerGuildBank[i].items[totalitem]==nil or type(DKPProfilerGuildBank[i].items[totalitem])~="table") then
+						DKPProfilerGuildBank[i].items[totalitem]={};
+						DKPProfilerGuildBank[i].items[totalitem].qty=qty;
+						DKPProfilerGuildBank[i].items[totalitem].quality=quality;
+						if(level>0) then
+							DKPProfilerGuildBank[i].items[totalitem].level=level;
+						end
+						DKPProfilerGuildBank[i].items[totalitem].itemtype=itemtype;
+						DKPProfilerGuildBank[i].items[totalitem].itemsubtype=itemsubtype;
+						DKPProfilerGuildBank[i].items[totalitem].itemclasses=class;
+						DKPProfilerGuildBank[i].items[totalitem].equiploc=getglobal(equiploc);
+					else
+						DKPProfilerGuildBank[i].items[totalitem].qty=DKPProfilerGuildBank[i].items[totalitem].qty+qty;
+					end
 				end
 			end
+			if TotalItems > 0 then
+				DKPProfilerBankTabTime[i] = CurTime;
+			end
+		else
+			--DKPPPrint("Tab "..i.." Loaded Recently: skipping");
 		end
 	end
 end
