@@ -2,8 +2,9 @@ DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
 DKPProfilerBankTabTime = {};
+DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.700 (2011-01-28)";
+local DKPPVersion = "0.700 (2011-03-17)";
 
 
 
@@ -150,8 +151,14 @@ function DKPPGetAchievements()
 	local achi = 1;
 	local achpoints,comp,desc;
 	local catrec = {};
+	DKPProfilerAchCat = {};
+
 	for i,catid in pairs(cats) do
-		cat = GetCategoryInfo(catid);
+		cat,parentcatid = GetCategoryInfo(catid);
+		DKPProfilerAchCat[catid] = {
+			["category"] = cat,
+			["parentcatid"] = parentcatid
+		};
 		--DKPPPrint("ach cat"..catid);
 		local numach = GetCategoryNumAchievements(catid);
 		--DKPPPrint("ok");
@@ -160,7 +167,7 @@ function DKPPGetAchievements()
 			achid,ach,achpoints,comp,M,D,Y,desc = GetAchievementInfo(catid,ii);
 			catrec = {};
 
-			catrec.category = cat;
+			catrec.catid = catid;
 			catrec.ach = ach;
 			catrec.description = desc;
 			catrec.completed = comp;
