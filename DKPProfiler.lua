@@ -1,8 +1,10 @@
 DKPProfiler = {};
 DKPProfilerCharInfo = {};
 DKPProfilerGuildBank = {};
+DKPProfilerBankTabTime = {};
+DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.637 (2010-01-24)";
+local DKPPVersion = "0.700 (2011-03-17)";
 
 
 
@@ -14,6 +16,7 @@ function DKPProfiler_OnLoad(this)
 	SLASH_DKPProfiler1 = "/dkpp";
 	SLASH_DKPProfiler2 = "/gbk";
 	
+	this:RegisterEvent("SPELLS_CHANGED");
 	this:RegisterEvent("BANKFRAME_OPENED");
 	this:RegisterEvent("GUILDBANKFRAME_OPENED");
 	this:RegisterEvent("GUILDBANK_UPDATE_TABS");
@@ -28,7 +31,6 @@ function DKPProfiler_OnLoad(this)
 	this:RegisterEvent("CONFIRM_TALENT_WIPE");
 	this:RegisterEvent("CHAT_MSG_SKILL");
 	this:RegisterEvent("PLAYER_ENTERING_WORLD");
-	--this:RegisterEvent("PLAYER_LEAVING_WORLD");
 	this:RegisterEvent("CHAT_MSG_MONEY");
 	this:RegisterEvent("UPDATE_FACTION");
 	this:RegisterEvent("QUEST_WATCH_UPDATE");
@@ -37,6 +39,8 @@ function DKPProfiler_OnLoad(this)
 	this:RegisterEvent("QUEST_PROGRESS");
 	this:RegisterEvent("ARENA_TEAM_UPDATE");
 	this:RegisterEvent("ACHIEVEMENT_EARNED");
+	this:RegisterEvent("ARCHAEOLOGY_TOGGLE");
+	this:RegisterEvent("ARENA_TEAM_ROSTER_UPDATE");
 
 	DEFAULT_CHAT_FRAME:AddMessage("DKP Profiler (from DKPSystem.com) Version "..DKPPVersion.." loaded. ");
 	DEFAULT_CHAT_FRAME:AddMessage("DKP Profiler will attempt to profile your character while you play, but typing |c00ffff00/dkpp|r will manually initiate a snapshot of the data available to the DKPProfiler mod");
@@ -54,10 +58,13 @@ end
 function DKPProfiler_OnEvent(self,event,...)
 	local arg1 = ...;
 
+	--GRSSPrint("Event: "..event);
+
 	if (event == "BANKFRAME_OPENED") then
 		BankOpenedOnce = true;
 	elseif (event == "GUILDBANKFRAME_OPENED") then
 		DKPPRefreshAllBankTabs();
+		DKPPAverageItemLevel();
 	elseif (event == "GUILDBANK_UPDATE_TABS" or event=="GUILDBANKBAGSLOTS_CHANGED") then
 		DKPPStoreGuildBankItems();
 	elseif (event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_UPDATE") then
@@ -66,14 +73,18 @@ function DKPProfiler_OnEvent(self,event,...)
 		DKPPGetQuests();
 	elseif (event == "ACHIEVEMENT_EARNED") then
 		DKPPGetAchievements();
+		DKPPGetGold();
 	elseif (event == "CHAT_MSG_SKILL") then
 		DKPPGetTalents();
+	elseif (event == "SPELLS_CHANGED") then
+		DKPPInitializeTradeSkills();
 	elseif (event == "ADDON_LOADED") then
 		DKPPinitialize();
 		DKPPGetPvP();
 		DKPPGetTalents();
 		DKPPGetGold();
 		DKPPStorePlayerItems();
+		DKPPInitializeTradeSkills();
 	elseif (event == "QUEST_WATCH_UPDATE" or event=="QUEST_FINISHED" or event=="QUEST_COMPLETE" or event=="QUEST_PROGRESS") then
 		DKPPGetQuests();
 	elseif (event == "CHARACTER_POINTS_CHANGED" or event=="CONFIRM_TALENT_WIPE" or event=="PLAYER_ENTERING_WORLD") then
@@ -82,8 +93,10 @@ function DKPProfiler_OnEvent(self,event,...)
 		DKPPGetReputations();
 	elseif (event == "CHAT_MSG_MONEY") then
 		DKPPGetGold();
-	elseif (event == "ARENA_TEAM_UPDATE") then
+	elseif (event == "ARENA_TEAM_UPDATE" or event=="ARENA_TEAM_ROSTER_UPDATE") then
 		DKPPGetPvP();
+	elseif (event == "ARCHAEOLOGY_TOGGLE") then
+		DKPPGetArchaeology();
 	end
 	if (event=="GUILDBANKFRAME_OPENED" or (BankOpenedOnce==true and (event == "BANKFRAME_OPENED" or (event == "PLAYERBANKSLOTS_CHANGED" and arg1 == nil) or (event == "BAG_UPDATE" and arg1 >= 6 and arg1 <= 10)))) then
 		DKPPGetTalents();
@@ -124,6 +137,7 @@ function DKPProfiler_SlashHandler(msg)
 	DKPPStorePlayerItems();
 	DKPPGetGold();
 	DKPPGetAchievements();
+	DKPPInitializeTradeSkills();
 end
 
 function DKPPGetAchievements()
@@ -137,18 +151,28 @@ function DKPPGetAchievements()
 	local achi = 1;
 	local achpoints,comp,desc;
 	local catrec = {};
+	DKPProfilerAchCat = {};
+
 	for i,catid in pairs(cats) do
-		cat = GetCategoryInfo(catid);
+		cat,parentcatid = GetCategoryInfo(catid);
+		DKPProfilerAchCat[catid] = {
+			["category"] = cat,
+			["parentcatid"] = parentcatid
+		};
+		--DKPPPrint("ach cat"..catid);
 		local numach = GetCategoryNumAchievements(catid);
+		--DKPPPrint("ok");
 		for ii = 1,numach do
 			local numdone = 0;
-			achid,ach,achpoints,comp,_,_,_,desc = GetAchievementInfo(catid,ii);
+			achid,ach,achpoints,comp,M,D,Y,desc = GetAchievementInfo(catid,ii);
 			catrec = {};
-			catrec.category = cat;
+
+			catrec.catid = catid;
 			catrec.ach = ach;
 			catrec.description = desc;
 			catrec.completed = comp;
 			catrec.crit = {};
+			catrec.points = achpoints;
 
 			local numcrit = GetAchievementNumCriteria(achid);
 			for iii = 1,numcrit do
@@ -165,6 +189,10 @@ function DKPPGetAchievements()
 				catrec.progress = nil;
 			else
 				catrec.progress = numdone.."/"..numcrit;
+			end
+
+			if comp == true then
+				catrec.date = M.."/"..D.."/"..(Y+2000);
 			end
 
 			if comp or numdone>0 then
@@ -247,6 +275,25 @@ function DKPPGetQuests()
 		i = i + 1;
 	end
 end
+
+function DKPPAverageItemLevel()
+	local player = UnitName("player")
+	local total,count,k=0,0
+	for i=1,18 do 
+		k=GetInventoryItemLink(player,i)
+		if i~=4 and k then 
+			total=total+select(4,GetItemInfo(k))
+			count=count+1 
+		end 
+	end
+	if count > 0 then
+		local AvgItemLevel = total/count;
+		if DKPProfilerCharInfo[player] ~= nil then
+			DKPProfilerCharInfo[player].avgitemlevel = AvgItemLevel;
+			DKPPStoreMetricHistory("avgitemlevel",AvgItemLevel);
+		end
+	end
+end
 	
 
 function DKPPGetGold()
@@ -256,19 +303,29 @@ function DKPPGetGold()
 	c = c - (g*10000);
 	s = math.floor(c/100);
 	c = c - (s*100);
+
 	local player = UnitName("player");
 	if(DKPProfilerCharInfo[player] == nil) then
 		DKPProfilerCharInfo[player] = {};
 	end
-	DKPProfilerCharInfo[player].money = g.." Gold, "..s.." Silver,"..c.." Copper";
+	local moneystring = g.." Gold, "..s.." Silver,"..c.." Copper";
+
+	DKPProfilerCharInfo[player].money = moneystring;
+	DKPPStoreMetricHistory("money",math.floor(GetMoney()/10000));
 	level = UnitLevel("player");
 	race = UnitRace("player");
 	class = UnitClass("player");
 	apoints = GetTotalAchievementPoints();
 
 	DKPProfilerCharInfo[player].achpoints = apoints;
+
+	DKPPStoreMetricHistory("achpoints",apoints);
+
+	DKPPAverageItemLevel();
+
 	if level~=nil then
 		DKPProfilerCharInfo[player].level = level;
+		DKPPStoreMetricHistory("level",level);
 	end
 	if race~=nil then
 		DKPProfilerCharInfo[player].race = race
@@ -280,35 +337,130 @@ function DKPPGetGold()
 end
 
 function DKPPGetTalents()
-	local tab,tabname,talentname, rank, max, i;
-	local talentstring = "";
 	local player = UnitName("player");
+
 	if(DKPProfilerCharInfo[player] == nil) then
 		DKPProfilerCharInfo[player] = {};
 	end
-	if GetTalentInfo(1,1)~=nil then
-		DKPProfilerCharInfo[player].talents = {};
-		for tab = 1, GetNumTalentTabs() do
-			tabname = GetTalentTabInfo(tab);
-			DKPProfilerCharInfo[player].talents[tabname] = {};
-			for i = 1, GetNumTalents(tab) do
-				talentname,_,_,_,rank,max = GetTalentInfo(tab,i);
-				DKPProfilerCharInfo[player].talents[tabname][i] = {};
-				DKPProfilerCharInfo[player].talents[tabname][i].name = talentname;
-				DKPProfilerCharInfo[player].talents[tabname][i].rank = rank;
-				DKPProfilerCharInfo[player].talents[tabname][i].max = max;
-				talentstring = talentstring .. rank;
-			end
-		end
-		DKPProfilerCharInfo[player].talents.talentstring = talentstring;
+
+	DKPProfilerCharInfo[player].talents = {};
+
+	Groups = GetNumTalentGroups();
+	for i = 1, Groups do
+		DKPProfilerCharInfo[player].talents[i] = DKPPGetTalents_Specific(i);
 	end
 end
 
+function DKPPGetTalents_Specific(GroupNum)
+	local tab,tabname,talentname, rank, max, i;
+	local talentstring = "";
+
+	local tt = {};
+	
+	if GetTalentInfo(1,1)~=nil then
+		for tab = 1, GetNumTalentTabs() do
+			_,tabname = GetTalentTabInfo(tab,false,false,GroupNum);
+			tt[tabname] = {};
+			for i = 1, GetNumTalents(tab) do
+				talentname,_,_,_,rank,max = GetTalentInfo(tab,i,false,false,GroupNum);
+				tt[tabname][i] = {};
+				tt[tabname][i].name = talentname;
+				tt[tabname][i].rank = rank;
+				tt[tabname][i].max = max;
+				talentstring = talentstring .. rank;
+			end
+		end
+		tt.talentstring = talentstring
+	end
+	tt.Glyphs = DKPPGetTalents_Glyphs(GroupNum)
+	return tt;
+end
+
+function DKPPGetTalents_Glyphs(GroupNum)
+	local glyphs = {};
+	local max = GetNumGlyphSockets();
+	for i = 1,max do
+		enabled = GetGlyphSocketInfo(i,GroupNum);
+		if enabled then
+			local link = GetGlyphLink(i,GroupNum);
+			if link ~= "" then
+				local item = DKPPNameFromLink(link,true)
+				--GRSSPrint(item);
+				glyphs[i] = item;
+			end
+		end
+	end
+	return glyphs;
+end
+
+function DKPPInitializeTradeSkills()
+	local player = UnitName("player");
+	local profs = {GetProfessions()};
+
+	if DKPProfilerCharInfo[player].professions == nil then
+		DKPProfilerCharInfo[player].professions = {};			
+	end
+
+	local usedprofs = {};
+
+	for i,profindex in pairs(profs) do
+		if profindex ~= nil then
+			--DKPPPrint("Prof:"..profindex);
+			local profname,_,level = GetProfessionInfo(profindex);
+			usedprofs[profname] = profname;
+			
+		
+			if DKPProfilerCharInfo[player].professions[profname]==nil then
+				DKPProfilerCharInfo[player].professions[profname] = {};
+			end
+			DKPProfilerCharInfo[player].professions[profname].lvl = level;
+			--DKPPPrint("Prof:"..profindex..":"..profname..":"..level);
+
+			DKPPStoreMetricHistory("Profession: "..profname,level);
+		end
+	end
+
+	for profname,profinfo in pairs(DKPProfilerCharInfo[player].professions) do
+		if usedprofs[profname] == nil then
+			DKPProfilerCharInfo[player].professions[profname] = nil
+		end
+	end
+
+end
+
+function DKPPGetArchaeology()
+	local player = UnitName("player");
+	local profname = "Archaeology";
+	if DKPProfilerCharInfo[player].professions[profname]==nil then
+		DKPProfilerCharInfo[player].professions[profname] = {};
+	end
+
+	if DKPProfilerCharInfo[player].professions[profname].skills==nil then
+		DKPProfilerCharInfo[player].professions[profname].skills = {};
+	end
+
+	local rarities = {};
+
+	local races = GetNumArchaeologyRaces();
+	for r=1,races do
+		local arts = GetNumArtifactsByRace(r);
+		for a = 2,arts do
+			local item,_,rarity = GetArtifactInfoByRace(r,a);
+			DKPProfilerCharInfo[player].professions[profname].skills[item] = item;
+		end
+	end
+end
+
+
+
 function DKPPGetCurrentTradeSkill()
+	DKPPInitializeTradeSkills();
+
 	local profname, lvl, max = GetTradeSkillLine();
 	local linked,linkedplayer = IsTradeSkillLinked();
 	if linked then
-		
+		--do nothing
+		--TODO: Add tracking for guildies?
 	else
 		local player = UnitName("player");
 		
@@ -323,12 +475,14 @@ function DKPPGetCurrentTradeSkill()
 				DKPProfilerCharInfo[player].professions[profname].skills = {};
 			end
 			DKPProfilerCharInfo[player].professions[profname].level = lvl;
+			DKPPStoreMetricHistory("Profession: "..profname,lvl);
+
 			local i, name, type;
 			for i = 1,GetNumTradeSkills() do
 				name, type, _, _ = GetTradeSkillInfo(i);
 				if(type ~= "header")then
 					DKPProfilerCharInfo[player].professions[profname].skills[name]=name;
-				end
+			end
 			end
 		end
 	end
@@ -337,6 +491,7 @@ end
 
 function DKPPGetPvP()
 	local player = UnitName("player");
+	local realm = GetRealmName();
 	if(DKPProfilerCharInfo[player] == nil) then
 		DKPProfilerCharInfo[player] = {};
 	end
@@ -345,15 +500,32 @@ function DKPPGetPvP()
 	end
 	
 	DKPProfilerCharInfo[player].pvp.arena = {};
-	local team,size,rating;
+	local team,size,rating,played,wins;
 	for i = 1,3 do
-		team,size,rating = GetArenaTeam(i);
+		team,size,rating,_,_,wins,played = GetArenaTeam(i);
 		if size ~= nil and size>0 then
+			num = GetNumArenaTeamMembers(i);
+			local players = {};
+			for mi = 1,num do
+				pname,_,plevel,pclass,_,_,_,pplayed,pwins,prating = GetArenaTeamRosterInfo(i,mi);
+				players[mi] = {
+					["name"]=pname,
+					["class"]=pclass,
+					["won"]=pwins,
+					["played"]=pplayed,
+					["rating"]=prating,
+				};
+			end
+
 			DKPProfilerCharInfo[player].pvp.arena[i] = {
 				["teamname"] = team,
 				["size"] = size,
 				["rating"] = rating,
+				["players"] = players,
+				["wins"] = wins,
+				["played"] = played
 			};
+			DKPPStoreMetricHistory(size.."v"..size..": "..team,rating);
 		end
 	end	
 	local hk,dk,rank,rankid;
@@ -368,9 +540,43 @@ function DKPPGetPvP()
 	DKPProfilerCharInfo[player].pvp.rank = rank;
 	DKPProfilerCharInfo[player].pvp.LifetimeHKs = hk;
 	DKPProfilerCharInfo[player].pvp.LifetimeDKs = dk;
-	--DKPProfilerCharInfo[player].pvp.HonorPoints = GetHonorCurrency(); -- call removed in 4.0
-	--DKPProfilerCharInfo[player].pvp.ArenaPoints = GetArenaCurrency();
 
+	_,ValorPoints = GetCurrencyInfo(396);
+	_,HonorPoints = GetCurrencyInfo(392);
+	_,ConquestPoints = GetCurrencyInfo(390)
+	_,JusticePoints = GetCurrencyInfo(395);
+
+	_,DKPProfilerCharInfo[player].pvp.ValorPoints = ValorPoints;
+	_,DKPProfilerCharInfo[player].pvp.HonorPoints = HonorPoints;
+	_,DKPProfilerCharInfo[player].pvp.ConquestPoints = ConquestPoints;
+	_,DKPProfilerCharInfo[player].pvp.JusticePoints = JusticePoints;
+
+	DKPPStoreMetricHistory("Valor Points",ValorPoints);
+	DKPPStoreMetricHistory("Honor Points",HonorPoints);
+	DKPPStoreMetricHistory("Conquest Points",ConquestPoints);
+	DKPPStoreMetricHistory("Justice Points",JusticePoints);
+
+	local Realm, Players
+
+	-- Old GearScore (3.0)
+	if GS_Data ~= nil and GS_Data[realm] ~= nil and GS_Data[realm].Players ~= nil then
+		Players = GS_Data[realm].Players
+		if Players[player] ~= nil and Players[player].GearScore ~= nil then
+			local gs = GearScore;
+			DKPProfilerCharInfo[player].gearscore = Players[player].GearScore;
+			DKPPStoreMetricHistory("gearscore",GearScore);
+		end
+	end
+
+	--New GearScore (4.0)
+	if TenTonHammer_Database ~= nil and TenTonHammer_Database[realm]~=nil and TenTonHammer_Database[realm][player]~=nil then
+		GSString = TenTonHammer_Database[realm][player];
+		local a = {};
+		for v in string.gmatch(GSString, "[^:]+") do tinsert(a, v); end
+		local GearScore, RaidScore, PVEScore, PVPScore = a[2], a[3], a[4], a[5];
+		DKPProfilerCharInfo[player].gearscore = GearScore;
+		DKPPStoreMetricHistory("gearscore",GearScore);
+	end
 end
 
 
@@ -387,8 +593,6 @@ function PurgeNecessarySkills()
 end
 
 
-
-
 function DKPPPrint(msg)
 	DEFAULT_CHAT_FRAME:AddMessage("DKPP: "..msg);
 end
@@ -401,19 +605,27 @@ function DKPPPrintAll()
 	for i, v in ipairs(DKPProfiler[player]["Bags"]) do DKPPPrint("Bags: " .. i .. " x " .. v) end
 end
 
-function DKPPNameFromLink(link)
+function DKPPNameFromLink(link,ItemNameOnly)
 	local quality;
 	local s,e=string.find(link,"%[.*]");
 	local itemname = string.sub(link,s+1,e-1);
-	s,e = string.find(link,"item:%d+:%d+:%d+:%d+");
-	local itemid = string.sub(link,s,e);
-	local _,_,quality,_,itype,isubtype = GetItemInfo(itemid);
-	--DKPPPrint(link..": "..itype.." :: "..isubtype.." :: "..ITEM_CLASSES_ALLOWED);
-	if(quality == nil) then
-		quality = 1;
+	
+	if ItemNameOnly then
+		return itemname;
+	else
+		s,e = string.find(link,"item:%d+:%d+:%d+:%d+");
+		local itemid = string.sub(link,s,e);
+		local _,_,quality,_,itype,isubtype = GetItemInfo(itemid);
+		
+		if(quality == nil) then
+			quality = 1;
+		end
+		return quality..":::"..itemname;
 	end
-	return quality..":::"..itemname;
 end
+
+
+
 
 --StoredPlace can be: "Bank","Bags","Player" for Bank, Player's Bags, and Currently Equipped
 function DKPPStoreBag(BagNum,StoredPlace)
@@ -538,39 +750,50 @@ function DKPPStoreGuildBankItems()
 	local tabs;
 	local i,j,items;
 	tabs = GetNumGuildBankTabs();
+	local CurTime = GetTime();
 	for i = 1,tabs do
-		DKPProfilerGuildBank[i] = {};
-		name = GetGuildBankTabInfo(i);
-		DKPProfilerGuildBank[i].name = name;
-		DKPProfilerGuildBank[i].items = {};
-		for j = 1,98 do
-			_,qty = GetGuildBankItemInfo(i,j);
-			item = GetGuildBankItemLink(i,j);
-			if(item~=nil) then
-				name,_,quality,_,level,itemtype,itemsubtype,_,equiploc = GetItemInfo(item);
-				class,ttlevel = DKPPGetClassAndLevelOfBankItem(i,j);
-				local totalitem = name;
-				if class ~= nil and string.len(class)>0 then
-					totalitem=totalitem..";;"..class
-				end
-				if ttlevel ~= nil and string.len(ttlevel)>0 then
-					totalitem=totalitem..";;"..ttlevel;
-				end
-				if (DKPProfilerGuildBank[i].items[totalitem]==nil or type(DKPProfilerGuildBank[i].items[totalitem])~="table") then
-					DKPProfilerGuildBank[i].items[totalitem]={};
-					DKPProfilerGuildBank[i].items[totalitem].qty=qty;
-					DKPProfilerGuildBank[i].items[totalitem].quality=quality;
-					if(level>0) then
-						DKPProfilerGuildBank[i].items[totalitem].level=level;
+		if DKPProfilerBankTabTime[i] == nil or CurTime > DKPProfilerBankTabTime[i] + 0.5 then
+			--DKPPPrint("Loading Tab: "..i);
+			DKPProfilerGuildBank[i] = {};
+			name = GetGuildBankTabInfo(i);
+			DKPProfilerGuildBank[i].name = name;
+			DKPProfilerGuildBank[i].items = {};
+			TotalItems = 0
+			for j = 1,98 do
+				_,qty = GetGuildBankItemInfo(i,j);
+				item = GetGuildBankItemLink(i,j);
+				if(item~=nil) then
+					TotalItems = TotalItems + 1;
+					name,_,quality,_,level,itemtype,itemsubtype,_,equiploc = GetItemInfo(item);
+					class,ttlevel = DKPPGetClassAndLevelOfBankItem(i,j);
+					local totalitem = name;
+					if class ~= nil and string.len(class)>0 then
+						totalitem=totalitem..";;"..class
 					end
-					DKPProfilerGuildBank[i].items[totalitem].itemtype=itemtype;
-					DKPProfilerGuildBank[i].items[totalitem].itemsubtype=itemsubtype;
-					DKPProfilerGuildBank[i].items[totalitem].itemclasses=class;
-					DKPProfilerGuildBank[i].items[totalitem].equiploc=getglobal(equiploc);
-				else
-					DKPProfilerGuildBank[i].items[totalitem].qty=DKPProfilerGuildBank[i].items[totalitem].qty+qty;
+					if ttlevel ~= nil and string.len(ttlevel)>0 then
+						totalitem=totalitem..";;"..ttlevel;
+					end
+					if (DKPProfilerGuildBank[i].items[totalitem]==nil or type(DKPProfilerGuildBank[i].items[totalitem])~="table") then
+						DKPProfilerGuildBank[i].items[totalitem]={};
+						DKPProfilerGuildBank[i].items[totalitem].qty=qty;
+						DKPProfilerGuildBank[i].items[totalitem].quality=quality;
+						if(level>0) then
+							DKPProfilerGuildBank[i].items[totalitem].level=level;
+						end
+						DKPProfilerGuildBank[i].items[totalitem].itemtype=itemtype;
+						DKPProfilerGuildBank[i].items[totalitem].itemsubtype=itemsubtype;
+						DKPProfilerGuildBank[i].items[totalitem].itemclasses=class;
+						DKPProfilerGuildBank[i].items[totalitem].equiploc=getglobal(equiploc);
+					else
+						DKPProfilerGuildBank[i].items[totalitem].qty=DKPProfilerGuildBank[i].items[totalitem].qty+qty;
+					end
 				end
 			end
+			if TotalItems > 0 then
+				DKPProfilerBankTabTime[i] = CurTime;
+			end
+		else
+			--DKPPPrint("Tab "..i.." Loaded Recently: skipping");
 		end
 	end
 end
@@ -647,14 +870,26 @@ function DKPPGetClassAndLevelOfItem(bag,slot)
 end
 
 
+function DKPPStoreMetricHistory(Metric,Value)
+	local player=UnitName("player");
+	--DKPPPrint("player: "..player);
+	
 
+	if DKPProfilerCharInfo[player]==nil then
+		DKPProfilerCharInfo[player]={};
+	end
+	if DKPProfilerCharInfo[player].history == nil then
+		DKPProfilerCharInfo[player].history = {};
+	end
 
+	if DKPProfilerCharInfo[player].history[Metric] == nil then
+		DKPProfilerCharInfo[player].history[Metric] = {};
+	end
 
+	Date = date("%Y-%m-%d");
 
+	--DKPPPrint("Storing Metric '" .. Metric .. "' (" .. Date .."): ");
 
-
-
-
-
-
+	DKPProfilerCharInfo[player].history[Metric][Date] = Value;
+end
 
