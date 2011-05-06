@@ -4,7 +4,7 @@ DKPProfilerGuildBank = {};
 DKPProfilerBankTabTime = {};
 DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.700 (2011-03-17)";
+local DKPPVersion = "0.701 (2011-05-06)";
 
 
 
@@ -892,4 +892,5 @@ function DKPPStoreMetricHistory(Metric,Value)
 
 	DKPProfilerCharInfo[player].history[Metric][Date] = Value;
 end
+
 
