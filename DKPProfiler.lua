@@ -4,7 +4,7 @@ DKPProfilerGuildBank = {};
 DKPProfilerBankTabTime = {};
 DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.703 (2011-12-15)";
+local DKPPVersion = "0.704 (2012-9-20)";
 
 
 
@@ -345,34 +345,55 @@ function DKPPGetTalents()
 
 	DKPProfilerCharInfo[player].talents = {};
 
-	Groups = GetNumTalentGroups();
+	Groups = GetNumSpecGroups();
 	for i = 1, Groups do
 		DKPProfilerCharInfo[player].talents[i] = DKPPGetTalents_Specific(i);
 	end
 end
 
+function DKPPGetWebsiteClassKey()
+	local class = UnitClass("player");
+	local ClassKeys = {
+		["Death Knight"] = "d",
+		["Druid"] = "U",
+		["Hunter"] = "Y",
+		["Mage"] = "e",
+		["Monk"] = "f",
+		["Paladin"] = "b",
+		["Priest"] = "X",
+		["Rogue"] = "c",
+		["Shaman"] = "W",
+		["Warlock"] = "V",
+		["Warrior"] = "Z"
+	};
+	return ClassKeys[class];
+end
+	
+
 function DKPPGetTalents_Specific(GroupNum)
-	local tab,tabname,talentname, rank, max, i;
-	local talentstring = "";
+
+	local tab,tabname,talentname,column,selected, i;
+	local talentstring = DKPPGetWebsiteClassKey() .. "!";
 
 	local tt = {};
 	
-	if GetTalentInfo(1,1)~=nil then
-		for tab = 1, GetNumTalentTabs() do
-			_,tabname = GetTalentTabInfo(tab,false,false,GroupNum);
-			tt[tabname] = {};
-			for i = 1, GetNumTalents(tab) do
-				talentname,_,_,_,rank,max = GetTalentInfo(tab,i,false,false,GroupNum);
-				tt[tabname][i] = {};
-				tt[tabname][i].name = talentname;
-				tt[tabname][i].rank = rank;
-				tt[tabname][i].max = max;
-				talentstring = talentstring .. rank;
+	if GetTalentInfo(1,nil,GroupNum)~=nil then
+		tt.Talents = {};
+		for i = 1, GetNumTalents(GroupNum) do
+			talentname,_,tier,column,selected = GetTalentInfo(i,nil,GroupNum);
+			if selected then
+				tt.Talents[tier] = {};
+				tt.Talents[tier].name = talentname;
+				talentstring = talentstring .. (column-1);
 			end
 		end
-		tt.talentstring = talentstring
 	end
-	tt.Glyphs = DKPPGetTalents_Glyphs(GroupNum)
+
+	local currentSpec = GetSpecialization(nil,nil,GroupNum);
+	local currentSpecName = currentSpec and select(2, GetSpecializationInfo(currentSpec)) or "None";
+	tt.Specialization = currentSpecName; 
+	tt.Glyphs = DKPPGetTalents_Glyphs(GroupNum);
+	tt.talentstring = talentstring;
 	return tt;
 end
 
@@ -892,6 +913,7 @@ function DKPPStoreMetricHistory(Metric,Value)
 
 	DKPProfilerCharInfo[player].history[Metric][Date] = Value;
 end
+
 
 
 
