@@ -1,7 +1,7 @@
-## Interface: 50001
+## Interface: 50200
 ## Title: DKPProfiler
 ## Notes: Profiles character information, including Guild Bank information
-## Version: 0.704
+## Version: 0.705
 ## SavedVariablesPerCharacter: DKPProfiler, DKPProfilerCharInfo, DKPProfilerGuildBank, DKPProfilerAchCat
 DKPProfiler.xml
 
