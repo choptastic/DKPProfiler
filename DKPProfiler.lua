@@ -4,7 +4,7 @@ DKPProfilerGuildBank = {};
 DKPProfilerBankTabTime = {};
 DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.705 (2013-04-01)";
+local DKPPVersion = "0.706 (2013-09-16)";
 
 
 
@@ -521,6 +521,8 @@ function DKPPGetPvP()
 	end
 	
 	DKPProfilerCharInfo[player].pvp.arena = {};
+	--[[
+	--Arena teams currently disabled.
 	local team,size,rating,played,wins;
 	for i = 1,3 do
 		team,size,rating,_,_,wins,played = GetArenaTeam(i);
@@ -548,7 +550,8 @@ function DKPPGetPvP()
 			};
 			DKPPStoreMetricHistory(size.."v"..size..": "..team,rating);
 		end
-	end	
+	end
+	--]]
 	local hk,dk,rank,rankid;
 	hk, dk = GetPVPLifetimeStats();
 	rankid = GetCurrentTitle();
