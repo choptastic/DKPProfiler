@@ -4,7 +4,7 @@ DKPProfilerGuildBank = {};
 DKPProfilerBankTabTime = {};
 DKPProfilerAchCat = {};
 BankOpenedOnce = false;
-local DKPPVersion = "0.706 (2013-09-16)";
+local DKPPVersion = "0.707 (2015-08-05)";
 
 
 
